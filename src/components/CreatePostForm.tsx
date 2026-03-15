@@ -24,7 +24,6 @@ export default function CreatePostForm() {
     const [visitDate, setVisitDate] = useState(new Date().toISOString().split("T")[0]);
     const [endDate, setEndDate] = useState(""); 
     const [majorRegion, setMajorRegion] = useState(searchParams.get("region") || "");
-    const [location, setLocation] = useState("");
     const [content, setContent] = useState("");
 
     // Image State
@@ -55,16 +54,10 @@ export default function CreatePostForm() {
                 setVisitDate(post.visit_date);
                 if (post.end_date) setEndDate(post.end_date);
                 
-                // Try to separate major region and detailed location
+                // Set major region from fetched location
                 const postLoc = post.location || "";
-                const foundMajor = MAJOR_REGIONS.find(r => postLoc.startsWith(r));
-                if (foundMajor) {
-                    setMajorRegion(foundMajor);
-                    setLocation(postLoc.replace(foundMajor, "").trim());
-                } else {
-                    setMajorRegion("");
-                    setLocation(postLoc);
-                }
+                const foundMajor = MAJOR_REGIONS.find(r => postLoc.includes(r));
+                setMajorRegion(foundMajor || "");
                 
                 setContent(post.content || "");
 
@@ -177,11 +170,8 @@ export default function CreatePostForm() {
             return;
         }
 
-        // Combine for storage consistency
-        const fullLocation = `${majorRegion} ${location}`.trim();
-
         await submitPost(
-            { title, visitDate, endDate, location: fullLocation, content },
+            { title, visitDate, endDate, location: majorRegion, content },
             existingImages,
             selectedFiles,
             previewUrls
@@ -260,7 +250,7 @@ export default function CreatePostForm() {
                 {/* Region Selection (Category) */}
                 <div>
                     <label htmlFor="majorRegion" className="block text-sm font-medium text-gray-700 mb-2">
-                        지역 (카테고리) <span className="text-amber-500">*</span>
+                        지역 선택 <span className="text-amber-500">*</span>
                     </label>
                     <div className="relative">
                         <select
@@ -284,21 +274,6 @@ export default function CreatePostForm() {
                             ))}
                         </select>
                     </div>
-                </div>
-
-                {/* Detailed Location */}
-                <div>
-                    <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
-                        상세 장소 <span className="text-gray-400 text-xs">(예: 해수욕장, 맛집 이름 등)</span>
-                    </label>
-                    <input
-                        id="location"
-                        type="text"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        placeholder="예) 애월읍 카페, 해운대 해수욕장"
-                        className="w-full px-4 py-3.5 bg-gray-50/80 border border-gray-200 rounded-2xl text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                    />
                 </div>
 
                 {/* Content Input */}
