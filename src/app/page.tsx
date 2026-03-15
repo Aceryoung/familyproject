@@ -1,65 +1,123 @@
-import Image from "next/image";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import MapFeedClient from "@/components/MapFeedClient";
+import Link from "next/link";
 
-export default function Home() {
+// Server Component (Data Fetching + UI)
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const supabase = await createSupabaseServerClient();
+
+  // 1. Fetch posts joined with their primary image (order_index = 0)
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select(`
+      id,
+      title,
+      visit_date,
+      end_date,
+      location,
+      content,
+      post_images (
+        image_url
+      )
+    `)
+    // post_images 필터: order_index 순으로 가장 첫 이미지만 배열에 담기 위해,
+    // 사실 eq("order_index", 0) 필터를 거는 것이 가장 정확하지만, 
+    // Supabase JS 클라이언트 문법 지원 상, 가져와서 클라이언트/서버에서 0번째 인덱스를 씁니다.
+    // 방문일 내림차순(최신순) 정렬
+    .order("visit_date", { ascending: false });
+
+  if (error) {
+    console.error("게시물 로드 에러:", error);
+  }
+
+  // 2. 비공개 버킷(archive_images)에 대한 Signed URL 일괄 발급
+  let signedUrlsMap = new Map<string, string>();
+  if (posts && posts.length > 0) {
+    const rawPaths = posts
+      .map((p) => {
+        const img = Array.isArray(p.post_images) ? p.post_images[0] : p.post_images;
+        return img?.image_url;
+      })
+      .filter(Boolean) as string[];
+
+    // 이전 방식(publicUrl)으로 저장된 경우 "/public/archive_images/" 이후의 진짜 경로만 추출
+    const validPaths = rawPaths.map(p => {
+      if (p.includes("/public/archive_images/")) {
+        return p.split("/public/archive_images/")[1];
+      }
+      // http로 시작하면 일단 무시 (단순 외부 링크 등)
+      if (p.startsWith("http")) return "";
+      return p;
+    }).filter(p => p !== "");
+
+    if (validPaths.length > 0) {
+      const { data: signedUrls, error: signedError } = await supabase.storage
+        .from("archive_images")
+        .createSignedUrls(validPaths, 3600); // 1시간 만료
+
+      if (!signedError && signedUrls) {
+        signedUrls.forEach((file) => {
+          if (file.signedUrl && file.path) signedUrlsMap.set(file.path, file.signedUrl);
+        });
+      } else {
+        console.error("Signed URL 발급 실패:", signedError);
+      }
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="min-h-dvh bg-[var(--background)] pb-24 relative">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-gray-100">
+        <div className="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-800 tracking-tight">
+            🏠 가족 여행 아카이브
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </header>
+
+      <div className="max-w-3xl mx-auto px-4 sm:px-5 py-6 sm:py-8">
+        {/* State: Error */}
+        {error && (
+          <div className="p-4 bg-red-50 text-red-600 rounded-2xl mb-6">
+            기록을 불러오는 중 오류가 발생했습니다.
+          </div>
+        )}
+
+        {/* State: Empty */}
+        {!error && (!posts || posts.length === 0) && (
+          <div className="py-20 text-center">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-amber-50 mb-6">
+              <span className="text-5xl">📸</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">
+              첫 추억을 남겨보세요
+            </h2>
+            <p className="text-gray-500 text-sm leading-relaxed mb-8">
+              아직 기록된 가족 여행이 없습니다.<br />
+              우측 하단 버튼을 눌러 사진을 올려보세요!
+            </p>
+          </div>
+        )}
+      </div>
+      {/* Client Map Feed Area */}
+      {!error && posts && (
+        <MapFeedClient posts={posts} signedUrlsMap={signedUrlsMap} />
+      )}
+      {/* Floating Action Button (FAB) */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <Link
+          href="/compose"
+          className="flex items-center justify-center w-14 h-14 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full shadow-lg shadow-orange-300/50 hover:shadow-xl hover:scale-105 active:scale-95 transition-all"
+          aria-label="새 추억 작성하기"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </Link>
+      </div>
+    </main>
   );
 }
