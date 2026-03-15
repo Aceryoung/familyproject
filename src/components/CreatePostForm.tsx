@@ -12,10 +12,19 @@ export default function CreatePostForm() {
     const editId = searchParams.get("edit"); // If present, we are in edit mode
 
     // Form State
+    // List of major regions for categorization
+    const MAJOR_REGIONS = [
+        "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", 
+        "대전광역시", "울산광역시", "세종특별자치시", "경기도", "강원특별자치도", 
+        "충청북도", "충청남도", "전라북도", "전라남도", "경상북도", "경상남도", 
+        "제주특별자치도", "울릉도", "독도"
+    ];
+
     const [title, setTitle] = useState("");
     const [visitDate, setVisitDate] = useState(new Date().toISOString().split("T")[0]);
-    const [endDate, setEndDate] = useState(""); // New field
-    const [location, setLocation] = useState(searchParams.get("region") || "");
+    const [endDate, setEndDate] = useState(""); 
+    const [majorRegion, setMajorRegion] = useState(searchParams.get("region") || "");
+    const [location, setLocation] = useState("");
     const [content, setContent] = useState("");
 
     // Image State
@@ -45,7 +54,18 @@ export default function CreatePostForm() {
                 setTitle(post.title);
                 setVisitDate(post.visit_date);
                 if (post.end_date) setEndDate(post.end_date);
-                setLocation(post.location || "");
+                
+                // Try to separate major region and detailed location
+                const postLoc = post.location || "";
+                const foundMajor = MAJOR_REGIONS.find(r => postLoc.startsWith(r));
+                if (foundMajor) {
+                    setMajorRegion(foundMajor);
+                    setLocation(postLoc.replace(foundMajor, "").trim());
+                } else {
+                    setMajorRegion("");
+                    setLocation(postLoc);
+                }
+                
                 setContent(post.content || "");
 
                 // Fetch images
@@ -151,8 +171,17 @@ export default function CreatePostForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        if (!majorRegion) {
+            alert("지역을 선택해주세요.");
+            return;
+        }
+
+        // Combine for storage consistency
+        const fullLocation = `${majorRegion} ${location}`.trim();
+
         await submitPost(
-            { title, visitDate, endDate, location, content },
+            { title, visitDate, endDate, location: fullLocation, content },
             existingImages,
             selectedFiles,
             previewUrls
@@ -228,17 +257,46 @@ export default function CreatePostForm() {
                     </div>
                 </div>
 
-                {/* Location */}
+                {/* Region Selection (Category) */}
+                <div>
+                    <label htmlFor="majorRegion" className="block text-sm font-medium text-gray-700 mb-2">
+                        지역 (카테고리) <span className="text-amber-500">*</span>
+                    </label>
+                    <div className="relative">
+                        <select
+                            id="majorRegion"
+                            required
+                            value={majorRegion}
+                            onChange={(e) => setMajorRegion(e.target.value)}
+                            className="w-full px-4 py-3.5 bg-gray-50/80 border border-gray-200 rounded-2xl text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent appearance-none"
+                            style={{
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239CA3AF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                                backgroundRepeat: "no-repeat",
+                                backgroundPosition: "right 1rem center",
+                                backgroundSize: "1.25rem",
+                            }}
+                        >
+                            <option value="" disabled>지역을 선택해주세요</option>
+                            {MAJOR_REGIONS.map((region) => (
+                                <option key={region} value={region}>
+                                    {region}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                {/* Detailed Location */}
                 <div>
                     <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
-                        장소
+                        상세 장소 <span className="text-gray-400 text-xs">(예: 해수욕장, 맛집 이름 등)</span>
                     </label>
                     <input
                         id="location"
                         type="text"
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
-                        placeholder="예) 제주특별자치도 서귀포시"
+                        placeholder="예) 애월읍 카페, 해운대 해수욕장"
                         className="w-full px-4 py-3.5 bg-gray-50/80 border border-gray-200 rounded-2xl text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                     />
                 </div>
