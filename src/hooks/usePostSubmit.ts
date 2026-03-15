@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import { getSupabase } from "@/lib/supabase";
 import { z } from "zod";
+import { revalidateHome } from "@/app/actions";
 
 export const PostSchema = z.object({
     title: z.string().min(1, "여행 제목은 필수입니다."),
@@ -157,6 +158,9 @@ export function usePostSubmit(editId: string | null) {
 
             setProgress(100);
             setStatus("success");
+
+            // 서버 측 캐시 무효화 실행
+            await revalidateHome();
 
             // Cleanup URLs
             previewUrls.forEach(url => URL.revokeObjectURL(url));
