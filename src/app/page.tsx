@@ -3,8 +3,6 @@ import MapFeedClient from "@/components/MapFeedClient";
 import Link from "next/link";
 
 // Server Component (Data Fetching + UI)
-export const dynamic = "force-dynamic";
-
 export default async function HomePage() {
   try {
     const supabase = await createSupabaseServerClient();
@@ -28,41 +26,6 @@ export default async function HomePage() {
     if (error) {
       console.error("게시물 로드 에러:", error);
     }
-
-  // 2. 비공개 버킷(archive_images)에 대한 Signed URL 일괄 발급
-  let signedUrlsMap = new Map<string, string>();
-  if (posts && posts.length > 0) {
-    const rawPaths = posts
-      .map((p) => {
-        const img = Array.isArray(p.post_images) ? p.post_images[0] : p.post_images;
-        return img?.image_url;
-      })
-      .filter(Boolean) as string[];
-
-    // 이전 방식(publicUrl)으로 저장된 경우 "/public/archive_images/" 이후의 진짜 경로만 추출
-    const validPaths = rawPaths.map(p => {
-      if (p.includes("/public/archive_images/")) {
-        return p.split("/public/archive_images/")[1];
-      }
-      // http로 시작하면 일단 무시 (단순 외부 링크 등)
-      if (p.startsWith("http")) return "";
-      return p;
-    }).filter(p => p !== "");
-
-    if (validPaths.length > 0) {
-      const { data: signedUrls, error: signedError } = await supabase.storage
-        .from("archive_images")
-        .createSignedUrls(validPaths, 3600); // 1시간 만료
-
-      if (!signedError && signedUrls) {
-        signedUrls.forEach((file) => {
-          if (file.signedUrl && file.path) signedUrlsMap.set(file.path, file.signedUrl);
-        });
-      } else {
-        console.error("Signed URL 발급 실패:", signedError);
-      }
-    }
-  }
 
     return (
       <main className="min-h-dvh bg-[var(--background)] pb-24 relative">
@@ -99,10 +62,12 @@ export default async function HomePage() {
             </div>
           )}
         </div>
+
         {/* Client Map Feed Area */}
         {!error && posts && (
-          <MapFeedClient posts={posts} signedUrlsMap={signedUrlsMap} />
+          <MapFeedClient posts={posts} />
         )}
+
         {/* Floating Action Button (FAB) */}
         <div className="fixed bottom-6 right-6 z-50">
           <Link

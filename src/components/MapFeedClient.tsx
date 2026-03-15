@@ -22,13 +22,14 @@ interface Post {
 
 interface MapFeedClientProps {
     posts: Post[];
-    signedUrlsMap: Map<string, string>;
 }
 
-export default function MapFeedClient({ posts, signedUrlsMap }: MapFeedClientProps) {
+export default function MapFeedClient({ posts }: MapFeedClientProps) {
     const router = useRouter();
     const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [signedUrlsMap, setSignedUrlsMap] = useState<Map<string, string>>(new Map());
+    const [isLoadingUrls, setIsLoadingUrls] = useState(false);
 
     // 1. Calculate how many posts exist per region for the Map markers
     const recordsMeta = useMemo(() => {
@@ -56,9 +57,51 @@ export default function MapFeedClient({ posts, signedUrlsMap }: MapFeedClientPro
         return posts.filter(post => post.location && post.location.includes(selectedRegion));
     }, [posts, selectedRegion]);
 
-    const handleRegionClick = (regionName: string) => {
+    const handleRegionClick = async (regionName: string) => {
         setSelectedRegion(regionName);
         setIsSheetOpen(true);
+        
+        // Fetch signed URLs for the selected region's posts on-demand
+        const regionPosts = posts.filter(post => post.location && post.location.includes(regionName));
+        if (regionPosts.length === 0) return;
+
+        setIsLoadingUrls(true);
+        const supabase = getSupabase();
+        
+        try {
+            const rawPaths = regionPosts
+                .map((p) => {
+                    const img = Array.isArray(p.post_images) ? p.post_images[0] : p.post_images;
+                    return img?.image_url;
+                })
+                .filter(Boolean) as string[];
+
+            const validPaths = rawPaths.map(p => {
+                if (p.includes("/public/archive_images/")) {
+                    return p.split("/public/archive_images/")[1];
+                }
+                if (p.startsWith("http")) return "";
+                return p;
+            }).filter(p => p !== "");
+
+            if (validPaths.length > 0) {
+                const { data: signedUrls, error: signedError } = await supabase.storage
+                    .from("archive_images")
+                    .createSignedUrls(validPaths, 3600);
+
+                if (!signedError && signedUrls) {
+                    const newMap = new Map(signedUrlsMap);
+                    signedUrls.forEach((file: any) => {
+                        if (file.signedUrl && file.path) newMap.set(file.path, file.signedUrl);
+                    });
+                    setSignedUrlsMap(newMap);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch signed URLs:", error);
+        } finally {
+            setIsLoadingUrls(false);
+        }
     };
 
     const handleCloseSheet = () => {
@@ -119,7 +162,17 @@ export default function MapFeedClient({ posts, signedUrlsMap }: MapFeedClientPro
                 title={selectedRegion || "지역 기록"}
             >
                 <div className="space-y-6">
-                    {filteredPosts.length > 0 ? (
+                    {isLoadingUrls && (
+                        <div className="flex items-center justify-center py-10 text-amber-500">
+                            <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            <span className="text-sm font-medium">사진을 불러오는 중...</span>
+                        </div>
+                    )}
+
+                    {!isLoadingUrls && filteredPosts.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {filteredPosts.map(post => {
                                 // Get the thumbnail
