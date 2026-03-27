@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import MapFeedClient from "@/components/MapFeedClient";
+import RecentRecords from "@/components/RecentRecords";
 import Link from "next/link";
 
 // Server Component (Data Fetching + UI)
@@ -66,6 +67,11 @@ export default async function HomePage() {
         {/* Client Map Feed Area */}
         {!error && posts && (
           <MapFeedClient posts={posts} />
+        )}
+
+        {/* Recent Records Section */}
+        {!error && posts && posts.length > 0 && (
+          <RecentRecords posts={posts} />
         )}
 
         {/* Floating Action Button (FAB) */}
