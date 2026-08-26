@@ -1,0 +1,18 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 매일 UTC 0시(KST 9시) 실행
+  workflow_dispatch:
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: keep-alive API 호출
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "Pinging https://familyproject-iota.vercel.app/api/cron"
+          curl -sf -X GET "https://familyproject-iota.vercel.app/api/cron" \
+            -H "Authorization: Bearer ${CRON_SECRET}"
