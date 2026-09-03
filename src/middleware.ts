@@ -41,25 +41,33 @@ export async function middleware(request: NextRequest) {
         }
     );
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
+    let user;
+    try {
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        if (authError) {
+            return supabaseResponse;
+        }
+        user = authUser;
 
-    // 인증되지 않은 사용자 → /login으로 리다이렉트
-    if (
-        !user &&
-        !request.nextUrl.pathname.startsWith("/login")
-    ) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/login";
-        return NextResponse.redirect(url);
-    }
+        // 인증되지 않은 사용자 → /login으로 리다이렉트
+        if (
+            !user &&
+            !request.nextUrl.pathname.startsWith("/login")
+        ) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/login";
+            return NextResponse.redirect(url);
+        }
 
-    // 이미 인증된 사용자가 /login에 접근하면 → / 로 리다이렉트
-    if (user && request.nextUrl.pathname.startsWith("/login")) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/";
-        return NextResponse.redirect(url);
+        // 이미 인증된 사용자가 /login에 접근하면 → / 로 리다이렉트
+        if (user && request.nextUrl.pathname.startsWith("/login")) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/";
+            return NextResponse.redirect(url);
+        }
+    } catch (e) {
+        console.error('[middleware] auth check failed:', e);
+        return supabaseResponse;
     }
 
     return supabaseResponse;
