@@ -1,7 +1,7 @@
 export default function PostLoading() {
     return (
         <main className="min-h-dvh bg-[var(--background)] pb-20">
-            <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-5 py-4 flex items-center justify-between">
+            <header className="sticky top-0 z-10 bg-[var(--background)]/80 backdrop-blur-xl border-b border-gray-100 px-5 py-4 flex items-center justify-between">
                 <div className="h-5 w-32 skeleton rounded-lg" />
                 <div className="flex gap-2">
                     <div className="h-8 w-12 skeleton rounded-lg" />
